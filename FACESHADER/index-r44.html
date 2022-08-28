@@ -1,0 +1,587 @@
+<!DOCTYPE HTML>
+<html lang="en">
+	<head>
+		<title>WebGL skin material [Lee Perry-Smith]</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black">
+		<style type="text/css">
+			body {
+				background:#000;
+				color:#aaa;
+				padding:0;
+				margin:0;
+				font-weight: bold;
+				overflow:hidden;
+			}
+
+			a {	color: #eee;	}
+
+			#info {
+				position: absolute;
+				top: 0px; width: 100%;
+				color: #eee;
+				padding: 5px;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+				z-index:1000;
+			}
+
+			#oldie {
+				background:rgb(200,100,0) !important;
+				color:#fff;
+			}
+
+		</style>
+	</head>
+
+	<body>
+
+		<script type="text/javascript" src="FOURSkin-3.js"></script>
+		<script type="text/javascript" src="FOURSkin-2.js"></script> <!--is 5-->
+		<script type="text/javascript" src="FOURSkin.js"></script> <!-- is 6-->
+
+		<div id="info">
+			webgl skin rendering demo by <a href="https://alteredqualia.com/" target="_blank">alteredqualia</a> -
+			<a href="https://github.com/mrdoob/three.js" target="_blank">three.js</a> -
+			<a href="http://www.ir-ltd.net/infinite-3d-head-scan-released/" target="_blank">Lee Perry-Smith</a> head
+		</div>
+
+		<script type="importmap">
+			
+			{
+				"imports": {
+					"three": "../ThreeJs/build/Three.module.js",
+					"EffectComposer": "../shaders/EffectComposer.js",
+					"ObjectLoader": "../ThreeJs/src/loaders/ObjectLoader.js",
+					"ShaderPass": "../ThreeJs/examples/jsm/postprocessing/ShaderPass.js",
+					"RenderPass": "../ThreeJs/examples/jsm/postprocessing/RenderPass.js",
+					"BloomPass": "../ThreeJs/examples/jsm/postprocessing/BloomPass.js",
+					"TexturePass": "../ThreeJs/examples/jsm/postprocessing/TexturePass.js",
+					"MaskPass": "../ThreeJs/examples/jsm/postprocessing/MaskPass.js"
+
+				}
+			}
+		</script>
+
+		<!-- <script type="text/javascript" src="ThreeSkin-r44.js"></script> -->
+		<script src="../ThreeJs/build/Three.module.js" type="module"></script>
+		<script>
+			let ShaderSkin;
+
+		</script>
+
+		<!-- <script type="text/javascript" src="ShaderExtras.js"></script> -->
+		<script src="ShaderSkinModule.js" type="module"></script>
+
+		<!-- <script type="text/javascript" src="EffectComposer.js"></script>
+		<script type="text/javascript" src="RenderPass.js"></script>
+		<script type="text/javascript" src="BloomPass.js"></script>
+		<script type="text/javascript" src="TexturePass.js"></script>
+		<script type="text/javascript" src="ShaderPass.js"></script>
+		<script type="text/javascript" src="MaskPass.js"></script> -->
+
+
+		<!-- <script type="text/javascript" src="Detector.js"></script> -->
+		<!-- <script type="text/javascript" src="RequestAnimationFrame.js"></script> -->
+		<!-- <script type="text/javascript" src="Stats.js"></script> -->
+
+		<script type="module" >
+			import * as THREE from "../ThreeJs/build/Three.module.js"
+			import * as EffectComposer from "../shaders/EffectComposer.js"
+			import * as ObjectLoader from "../ThreeJs/src/loaders/ObjectLoader.js"
+			import * as ShaderPass from "../ThreeJs/examples/jsm/postprocessing/ShaderPass.js"
+			import * as RenderPass from "../ThreeJs/examples/jsm/postprocessing/RenderPass.js"
+			import * as BloomPass from "../ThreeJs/examples/jsm/postprocessing/BloomPass.js"
+			import * as TexturePass from "../ThreeJs/examples/jsm/postprocessing/TexturePass.js"
+			import * as MaskPass from "../ThreeJs/examples/jsm/postprocessing/MaskPass.js"
+			import * as Color from "../ThreeJs/src/math/Color.js"
+			console.log(Color)
+
+			let composerScene;
+			let renderScene;
+			// THREE = THREE
+			console.log(THREE)
+
+			// if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			let composerFinal;
+			var statsEnabled = false;
+
+			var container, stats, loader;
+
+			var camera, scene, renderer;
+
+			var mesh;
+
+			var composer, composerUV1, composerUV2, composerUV3, composerBeckmann;
+
+			var directionalLight, pointLight, ambientLight;
+
+			var mouseX = 0, mouseY = 0;
+			var targetX = 0, targetY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			init();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.Camera( 35, window.innerWidth / window.innerHeight, 1, 100000 );
+				camera.position.z = 900;
+
+				scene = new THREE.Scene();
+
+				// LIGHTS
+
+				ambientLight = new THREE.AmbientLight( 0x222222 );
+				scene.add( ambientLight );
+
+
+				directionalLight = new THREE.DirectionalLight( 0xffeedd, 1 );
+				directionalLight.position.set( 1, -1, 1 );
+				directionalLight.position.normalize();
+				scene.add( directionalLight );
+
+				// MATERIALS
+
+				var ambient = 0x111111, diffuse = 0xbbbbbb, specular = 0x070707, shininess = 50;
+
+				specular = 0x555555;
+
+				var shader = ShaderSkin[ "skin" ];
+
+				var uniformsUV = THREE.UniformsUtils.clone( shader.uniforms );
+
+				
+				
+				uniformsUV[ "tNormal" ].texture = new THREE.TextureLoader().load( "https://cdn.glitch.global/a5d90d24-dc8f-49e8-9253-7306c2f4d007/Infinite-Level_02_Tangent_SmoothUV%20(1).jpg?v=1659924639254" );
+				uniformsUV[ "uNormalScale" ].value = -0.75;
+
+				uniformsUV[ "tDiffuse" ].texture = new THREE.TextureLoader().load("https://cdn.glitch.global/a5d90d24-dc8f-49e8-9253-7306c2f4d007/Map-COL.jpg?v=1659924639452" );
+
+				uniformsUV[ "passID" ].value = 0;
+
+				uniformsUV[ "uDiffuseColor" ].value.setHex( diffuse );
+				uniformsUV[ "uSpecularColor" ].value.setHex( specular );
+				uniformsUV[ "uAmbientColor" ].value.setHex( ambient );
+
+				uniformsUV[ "uRoughness" ].value = 0.185;
+				uniformsUV[ "uSpecularBrightness" ].value = 0.8;
+
+				var uniforms = THREE.UniformsUtils.clone( uniformsUV );
+				uniforms[ "tDiffuse" ].texture = uniformsUV[ "tDiffuse" ].texture;
+				uniforms[ "tNormal" ].texture = uniformsUV[ "tNormal" ].texture;
+				uniforms[ "passID" ].value = 1;
+
+				var parameters = { fragmentShader: shader.fragmentShader, vertexShader: shader.vertexShader, uniforms: uniforms, lights: true };
+				var parametersUV = { fragmentShader: shader.fragmentShader, vertexShader: shader.vertexShaderUV, uniforms: uniformsUV, lights: true };
+
+
+				let material = new THREE.ShaderMaterial( parameters );
+				var materialUV = new THREE.ShaderMaterial( parametersUV );
+
+				// LOADER
+
+				loader = new SIX.JSONLoader( true );
+				document.body.appendChild( loader.statusDomElement );
+
+        const geometry13 = new THREE.BoxGeometry( 10000, 10000, 10000 );
+const material23 = new THREE.MeshPhongMaterial( {color: 0x00ff00} );
+const cube = new THREE.Mesh( geometry13, material23 );
+scene.add( cube );
+// cube.position.z=900;
+console.log(scene)
+        
+				loader.load( { model: "LeePerrySmithV2.js", callback: function( geometry ) { createScene( geometry, 100, material ) } } );
+
+				console.log("model added!")
+				// RENDERER
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setClearColor( 0x050505, 1 );
+				renderer.autoClear = false;
+
+				container.appendChild( renderer.domElement );
+				
+				// STATS
+
+				if ( statsEnabled ) {
+
+					stats = new Stats();
+					stats.domElement.style.position = 'absolute';
+					stats.domElement.style.top = '0px';
+					stats.domElement.style.zIndex = 100;
+					container.appendChild( stats.domElement );
+
+				}
+
+				// EVENTS
+
+				window.addEventListener( 'resize', onWindowResize, false );
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'touchmove', onTouchMove, { passive: false } );
+
+
+				// POSTPROCESSING
+
+				console.log(THREE)
+				var renderModelUV = new RenderPass.RenderPass( scene, camera, materialUV, new THREE.Color( 0xca9c8d ) );
+				var renderModel = new RenderPass.RenderPass( scene, camera );
+
+				let ClearColor = new Color.Color(renderModelUV.clearColor)
+				ClearColor.offsetHSL(0, -0.5, -0.45 );
+				renderModelUV.clearColor = ClearColor;
+
+				var effectScreen = new ShaderPass.ShaderPass({
+
+uniforms: {
+
+	tDiffuse: { type: "t", value: 0, texture: null },
+	opacity:  { type: "f", value: 1.0 }
+
+},
+
+vertexShader: [
+
+	"varying vec2 vUv;",
+
+	"void main() {",
+
+		"vUv = vec2( uv.x, 1.0 - uv.y );",
+		"gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
+
+	"}"
+
+].join("\n"),
+
+fragmentShader: [
+
+	"uniform float opacity;",
+
+	"uniform sampler2D tDiffuse;",
+
+	"varying vec2 vUv;",
+
+	"void main() {",
+
+		"vec4 texel = texture2D( tDiffuse, vUv );",
+		"gl_FragColor = opacity * texel;",
+
+	"}"
+
+].join("\n")
+
+} );
+
+				var effectBloom1 = new BloomPass.BloomPass( 1, 15, 2, 512 );
+				var effectBloom2 = new BloomPass.BloomPass( 1, 25, 4, 512 );
+				var effectBloom3 = new BloomPass.BloomPass( 1, 25, 8, 512 );
+
+				effectBloom1.clear = true;
+				effectBloom2.clear = true;
+				effectBloom3.clear = true;
+
+				//effectScreen.renderToScreen = true;
+
+				//
+
+				var pars = { minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, stencilBufer: false };
+				var rtwidth = 512;
+				var rtheight = 512;
+
+				//
+
+				composerScene = new EffectComposer.EffectComposer( renderer, new THREE.WebGLRenderTarget( rtwidth, rtheight, pars ) );
+				composerScene.addPass( renderModelUV );
+				composerScene.addPass( effectScreen );
+
+				renderScene = new TexturePass.TexturePass( composerScene.renderTarget2 );
+
+				//
+
+				composerUV1 = new EffectComposer.EffectComposer( renderer, new THREE.WebGLRenderTarget( rtwidth, rtheight, pars ) );
+
+				composerUV1.addPass( renderScene );
+				composerUV1.addPass( effectBloom1 );
+
+				composerUV2 = new EffectComposer.EffectComposer( renderer, new THREE.WebGLRenderTarget( rtwidth, rtheight, pars ) );
+
+				composerUV2.addPass( renderScene );
+				composerUV2.addPass( effectBloom2 );
+
+				composerUV3 = new EffectComposer.EffectComposer( renderer, new THREE.WebGLRenderTarget( rtwidth, rtheight, pars ) );
+
+				composerUV3.addPass( renderScene );
+				composerUV3.addPass( effectBloom3 );
+
+				//
+
+				var effectBeckmann = new ShaderPass.ShaderPass( ShaderSkin[ "beckmann" ] );
+
+				composerBeckmann = new EffectComposer.EffectComposer( renderer, new THREE.WebGLRenderTarget( rtwidth, rtheight, pars ) );
+
+				composerBeckmann.addPass( effectBeckmann );
+
+				//
+
+				var effectBloom = new BloomPass.BloomPass( 0.25 );
+
+				var effectBleach = new ShaderPass.ShaderPass( {
+
+uniforms: {
+
+	tDiffuse: { type: "t", value: 0, texture: null },
+	opacity:  { type: "f", value: 1.0 }
+
+},
+
+vertexShader: [
+
+	"varying vec2 vUv;",
+
+	"void main() {",
+
+		"vUv = vec2( uv.x, 1.0 - uv.y );",
+		"gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
+
+	"}"
+
+].join("\n"),
+
+fragmentShader: [
+
+	"uniform float opacity;",
+
+	"uniform sampler2D tDiffuse;",
+
+	"varying vec2 vUv;",
+
+	"void main() {",
+
+		"vec4 base = texture2D( tDiffuse, vUv );",
+
+		"vec3 lumCoeff = vec3( 0.25, 0.65, 0.1 );",
+		"float lum = dot( lumCoeff, base.rgb );",
+		"vec3 blend = vec3( lum );",
+
+		"float L = min( 1.0, max( 0.0, 10.0 * ( lum - 0.45 ) ) );",
+
+		"vec3 result1 = 2.0 * base.rgb * blend;",
+		"vec3 result2 = 1.0 - 2.0 * ( 1.0 - blend ) * ( 1.0 - base.rgb );",
+
+		"vec3 newColor = mix( result1, result2, L );",
+
+		"float A2 = opacity * base.a;",
+		"vec3 mixRGB = A2 * newColor.rgb;",
+		"mixRGB += ( ( 1.0 - A2 ) * base.rgb );",
+
+		"gl_FragColor = vec4( mixRGB, base.a );",
+
+	"}"
+
+].join("\n")
+
+} );
+				effectBleach.uniforms.opacity.value = 0.25;
+
+				effectBleach.renderToScreen = true;
+
+				composerFinal = new EffectComposer.EffectComposer( renderer );
+
+				composerFinal.addPass( renderModel );
+				composerFinal.addPass( effectBloom );
+				composerFinal.addPass( effectBleach );
+
+				//
+
+				uniforms[ "tBlur1" ].texture = composerScene.renderTarget1;
+				uniforms[ "tBlur2" ].texture = composerUV1.renderTarget2;
+				uniforms[ "tBlur3" ].texture = composerUV2.renderTarget2;
+				uniforms[ "tBlur4" ].texture = composerUV3.renderTarget2;
+
+				uniforms[ "tBeckmann" ].texture = composerBeckmann.renderTarget1;
+
+
+			}
+
+			// --------------------------------------------------------------------------
+
+			function convertGeometryToFiveBufferGeometry(geometry){
+				console.log(geometry)
+				console.log(FIVE)
+
+//convert geometry to fiveGeometry
+var fiveGeometry = new FIVE.Geometry();
+console.log(fiveGeometry)
+// fiveGeometry.faceVertexUvs = geometry.faceVertexUvs //an array of arrays that contains six.uv that have a u and a v
+// fiveGeometry.vertices = geometry.vertices //an array of six.vertex that has a position attribute that contains six.vector3 that has an object with x y z
+
+for (var i=0; i<geometry.vertices.length;i++){
+fiveGeometry.vertices.push(new FIVE.Vector3(geometry.vertices[i].position.x,geometry.vertices[i].position.y,geometry.vertices[i].position.z))
+}
+
+// fiveGeometry.faces = geometry.faces //an array of six.face4 (oh no)
+// console.log(Object.keys(geometry.faces))
+
+if(geometry.faces[0] instanceof SIX.Face4){
+
+
+for ( var i=0, vl=geometry.faces.length; i<vl; i+=1) {
+
+
+
+if(geometry.faces[i] instanceof SIX.Face3){
+	fiveGeometry.faceVertexUvs[0].push([new FIVE.Vector2(geometry.faceVertexUvs[0][i][0].u,geometry.faceVertexUvs[0][i][0].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][1].u,geometry.faceVertexUvs[0][i][1].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][2].u,geometry.faceVertexUvs[0][i][2].v)])
+
+	fiveGeometry.faces.push( new FIVE.Face3( geometry.faces[i].a, geometry.faces[i].b, geometry.faces[i].c ) );
+
+} else {
+	fiveGeometry.faceVertexUvs[0].push([new FIVE.Vector2(geometry.faceVertexUvs[0][i][0].u,geometry.faceVertexUvs[0][i][0].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][1].u,geometry.faceVertexUvs[0][i][1].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][2].u,geometry.faceVertexUvs[0][i][2].v)])
+	// console.log(i)
+	// console.log(geometry.faceVertexUvs[0][i][3].u,geometry.faceVertexUvs[0][i][3].v)
+	fiveGeometry.faceVertexUvs[0].push([new FIVE.Vector2(geometry.faceVertexUvs[0][i][0].u,geometry.faceVertexUvs[0][i][0].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][2].u,geometry.faceVertexUvs[0][i][2].v),new FIVE.Vector2(geometry.faceVertexUvs[0][i][3].u,geometry.faceVertexUvs[0][i][3].v)])
+
+	fiveGeometry.faces.push( new FIVE.Face3( geometry.faces[i].a, geometry.faces[i].b, geometry.faces[i].c ) );
+	fiveGeometry.faces.push( new FIVE.Face3( geometry.faces[i].a, geometry.faces[i].c, geometry.faces[i].d ) );
+}
+
+	
+
+}
+}
+
+
+console.log(fiveGeometry)
+
+let bGeometry = new FIVE.BufferGeometry();
+bGeometry.fromGeometry(fiveGeometry)
+
+return bGeometry
+			}
+
+
+			function createScene( geometry, scale, material ) {
+
+				console.log(FOUR)
+				console.log(geometry) //SIX.geometry because six can import the json and turn it into a geometry
+
+				//THE IDEA IS TO TAKE THE GEOMETRY DATA FROM SIX.GEOMETRY, CONVERT IT TO A FIVE.BUFFERGEOMETRY FROM .fromGeometry() then convert THAT bufferGeometry to THREE.
+
+				// var bGeometry = new FIVE.BufferGeometry();
+					// console.log(bGeometry)
+
+					let bGeometry = convertGeometryToFiveBufferGeometry(geometry)
+
+					// bGeometry.fromGeometry(fiveGeometry);
+					console.log(bGeometry)
+
+				geometry.computeTangents();
+
+				let correctBufferGeometry = new THREE.BufferGeometry(); //eventually will receive all the data.
+				console.log(correctBufferGeometry)
+				correctBufferGeometry.attributes = bGeometry.attributes
+				correctBufferGeometry.groups=bGeometry.groups
+				console.log(correctBufferGeometry)
+
+				mesh = new THREE.Mesh( correctBufferGeometry, material );
+				mesh.position.y = - 50;
+				mesh.scale.set( scale, scale, scale );
+				mesh.doubleSided = true;
+				
+				console.log(mesh)
+				scene.add( mesh );
+
+				loader.statusDomElement.style.display = "none";
+
+			}
+
+			// --------------------------------------------------------------------------
+
+			function onWindowResize ( event ) {
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				// camera.updateProjectionMatrix();
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+			}
+
+			// --------------------------------------------------------------------------
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = ( event.clientX - windowHalfX );
+				mouseY = ( event.clientY - windowHalfY );
+
+			}
+
+			function onTouchMove ( event ) {
+
+				event.preventDefault();
+
+				var touches = event.touches;
+				var touch = touches[ 0 ];
+
+				mouseX = ( touch.clientX - windowHalfX );
+				mouseY = ( touch.clientY - windowHalfY );
+
+			}
+
+			// --------------------------------------------------------------------------
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				render();
+				if ( statsEnabled ) stats.update();
+
+			}
+
+			function render() {
+
+				targetX = mouseX * .001;
+				targetY = mouseY * .001;
+
+				if ( mesh ) {
+
+					mesh.rotation.y += 0.05 * ( targetX - mesh.rotation.y );
+					mesh.rotation.x += 0.05 * ( targetY - mesh.rotation.x );
+
+				}
+
+				renderer.clear();
+
+				composerBeckmann.render();
+
+
+				composerScene.render();
+
+				composerUV1.render();
+				composerUV2.render();
+				composerUV3.render();
+
+				// composerFinal.render( 0.1 );
+				renderer.render( scene, camera );
+
+				// console.log(renderer)
+
+			}
+
+
+		</script>
+		<!-- <script async src="js/libs/rabbit.js"></script> -->
+	</body>
+</html>
